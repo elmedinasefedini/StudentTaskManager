@@ -1,58 +1,36 @@
 import * as Notifications from 'expo-notifications';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Permissions from 'expo-permissions';
+import { Platform } from 'react-native';
 
-const STORAGE_KEY = "@tasks";
-
-// Konfiguro njoftimet
+// Konfigurimi i njoftimeve në sfond
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
-    shouldSetBadge: true,
+    shouldSetBadge: false,
   }),
 });
 
-// Anulo të gjitha njoftimet e planifikuara më parë
-export async function cancelAllNotifications() {
-  await Notifications.cancelAllScheduledNotificationsAsync();
-  await AsyncStorage.removeItem("@lastTaskNotification");
+// Kërkon leje për njoftime
+export async function requestNotificationPermissions() {
+  const { status } = await Notifications.requestPermissionsAsync();
+  return status === 'granted';
 }
 
-// Dërgo njoftim vetëm kur ruhet një detyrë e re
-export async function sendTaskSavedNotification() {
-  const lastNotification = await AsyncStorage.getItem("@lastTaskNotification");
-
-  if (!lastNotification) {
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "Njoftim",
-        body: "Detyra juaj është ruajtur me sukses",
-        sound: "default",
-      },
-      trigger: null,
-    });
-
-    await AsyncStorage.setItem("@lastTaskNotification", JSON.stringify({ message: "Detyra u ruajt" }));
-  }
-}
-
-// Planifiko një njoftim për një detyrë të caktuar
+// Planifikon një njoftim për një afat detyre
 export async function scheduleTaskNotification(task) {
-  if (!task || !task.deadline) return;
+  const hasPermission = await requestNotificationPermissions();
+  if (!hasPermission) return;
 
-  console.log("📅 Scheduling notification for:", task.title);
+  const deadline = new Date(task.deadline);
+  deadline.setDate(deadline.getDate() - 1); // 1 ditë para afatit
 
-  const deadlineDate = new Date(task.deadline);
-  deadlineDate.setHours(9, 0, 0);
-
-  if (deadlineDate > new Date()) {
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "Mos harro detyrën!",
-        body: `Përfundo: ${task.title} për kursin ${task.course}.`,
-        sound: "default",
-      },
-      trigger: { date: deadlineDate },
-    });
-  }
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'Kujtesë për Detyrën 📌',
+      body: `Afati për "${task.title}" është nesër!`,
+      sound: true,
+    },
+    trigger: deadline,
+  });
 }

@@ -1,28 +1,60 @@
-import React, { useState, useContext } from 'react';
-import { View, TextInput, Button, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import React, { useState, useContext, useEffect, useRef } from 'react';
+import { View, TextInput, StyleSheet, Text, TouchableOpacity, Animated, Alert } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { TaskContext } from '../App';
-import Icon from 'react-native-vector-icons/FontAwesome'; // Ikona për prioritetet
-import { CircularProgress } from 'react-native-circular-progress'; // Grafik për progresin
+import Icon from 'react-native-vector-icons/FontAwesome';
+import { ProgressCircle } from 'react-native-svg-charts';
+import Slider from '@react-native-community/slider';
+import { Picker } from '@react-native-picker/picker';
 
 export default function AddTaskScreen({ navigation }) {
   const { tasks, setTasks } = useContext(TaskContext);
   const [newTask, setNewTask] = useState({
     title: '',
     course: '',
-    deadline: '',
-    priority: '',
+    deadline: new Date(),
+    time: new Date(),
+    priority: 'Medium',
     progress: 0,
   });
 
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
   const handleSave = () => {
-    const task = { id: Date.now().toString(), ...newTask };
-    setTasks([...tasks, task]);
+    if (!newTask.title || !newTask.course) {
+      Alert.alert('Error', 'Please fill in all fields!');
+      return;
+    }
+
+    const task = {
+      id: Date.now().toString(),
+      title: newTask.title,
+      course: newTask.course,
+      deadline: newTask.deadline.toISOString(),
+      time: newTask.time.toISOString(),
+      priority: newTask.priority,
+      progress: newTask.progress,
+    };
+
+    console.log('Saving Task:', task);
+    setTasks((prevTasks) => [...prevTasks, task]);
     navigation.goBack();
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Add New Task</Text>
+    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+      <Text style={styles.header}>➕ Add New Task</Text>
 
       <TextInput
         style={styles.input}
@@ -38,45 +70,79 @@ export default function AddTaskScreen({ navigation }) {
         onChangeText={(text) => setNewTask({ ...newTask, course: text })}
       />
 
-      <TextInput
-        style={styles.input}
-        placeholder="Deadline"
-        value={newTask.deadline}
-        onChangeText={(text) => setNewTask({ ...newTask, deadline: text })}
-      />
+      <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.datePicker}>
+        <Icon name="calendar" size={20} color="#D64E84" />
+        <Text style={styles.dateText}>{newTask.deadline.toDateString()}</Text>
+      </TouchableOpacity>
 
-      <View style={styles.priorityContainer}>
-        <Icon
-          name={newTask.priority === 'High' ? 'flag' : newTask.priority === 'Medium' ? 'star' : 'check'}
-          size={30}
-          color={newTask.priority === 'High' ? 'red' : newTask.priority === 'Medium' ? 'orange' : 'green'}
+      {showDatePicker && (
+        <DateTimePicker
+          value={newTask.deadline}
+          mode="date"
+          display="default"
+          onChange={(event, selectedDate) => {
+            setShowDatePicker(false);
+            if (selectedDate) setNewTask({ ...newTask, deadline: selectedDate });
+          }}
         />
-        <TextInput
-          style={[styles.input, { width: '70%' }]}
-          placeholder="Priority (High, Medium, Low)"
-          value={newTask.priority}
-          onChangeText={(text) => setNewTask({ ...newTask, priority: text })}
+      )}
+
+      <TouchableOpacity onPress={() => setShowTimePicker(true)} style={styles.datePicker}>
+        <Icon name="clock-o" size={20} color="#D64E84" />
+        <Text style={styles.dateText}>{newTask.time.toLocaleTimeString()}</Text>
+      </TouchableOpacity>
+
+      {showTimePicker && (
+        <DateTimePicker
+          value={newTask.time}
+          mode="time"
+          display="default"
+          onChange={(event, selectedTime) => {
+            setShowTimePicker(false);
+            if (selectedTime) setNewTask({ ...newTask, time: selectedTime });
+          }}
         />
+      )}
+
+      <View style={styles.pickerContainer}>
+        <Icon name="flag" size={25} color="#D64E84" style={{ marginRight: 10 }} />
+        <Picker
+          selectedValue={newTask.priority}
+          style={styles.picker}
+          onValueChange={(itemValue) => setNewTask({ ...newTask, priority: itemValue })}
+        >
+          <Picker.Item label="🔴 High Priority" value="High" />
+          <Picker.Item label="🟡 Medium Priority" value="Medium" />
+          <Picker.Item label="🟢 Low Priority" value="Low" />
+        </Picker>
       </View>
 
-      <Text style={styles.progressLabel}>Progress</Text>
-      <CircularProgress
+      <Text style={styles.progressLabel}>Progress: {newTask.progress}%</Text>
+      <Slider
+        style={{ width: '90%', height: 40 }}
+        minimumValue={0}
+        maximumValue={100}
+        step={5}
         value={newTask.progress}
-        radius={60}
-        valueSuffix="%"
-        textColor="#4CAF50"
-        progressValueColor="#4CAF50"
-        activeStrokeColor="#4CAF50"
-        activeStrokeWidth={12}
-        inActiveStrokeColor="#E0E0E0"
-        inActiveStrokeWidth={12}
-        showPercentage
+        onValueChange={(value) => setNewTask({ ...newTask, progress: value })}
+        minimumTrackTintColor="#D64E84"
+        maximumTrackTintColor="#ccc"
+        thumbTintColor="#D64E84"
       />
 
-      <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-        <Text style={styles.buttonText}>Save Task</Text>
-      </TouchableOpacity>
-    </View>
+      <ProgressCircle
+        style={{ height: 100, marginBottom: 20 }}
+        progress={newTask.progress / 100}
+        progressColor={'#FF69B4'}
+        backgroundColor="#F8BBD0"
+      />
+
+      <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+        <TouchableOpacity style={styles.saveButton} onPress={handleSave} activeOpacity={0.7}>
+          <Text style={styles.buttonText}>✅ Save Task</Text>
+        </TouchableOpacity>
+      </Animated.View>
+    </Animated.View>
   );
 }
 
@@ -84,40 +150,55 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: '#F8F1F9', // Soft pink background
+    backgroundColor: '#FCE4EC',
+    alignItems: 'center',
   },
   header: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#D64E84', // Dark pink color for the header
-    textAlign: 'center',
+    color: '#D64E84',
     marginBottom: 20,
   },
   input: {
     height: 45,
-    borderColor: '#D64E84', // Pink border
+    width: '90%',
+    borderColor: '#D64E84',
     borderWidth: 1.5,
-    borderRadius: 8,
+    borderRadius: 10,
     paddingLeft: 12,
     marginBottom: 15,
-    backgroundColor: '#fff', // White background for inputs
+    backgroundColor: '#fff',
   },
-  priorityContainer: {
+  datePicker: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    backgroundColor: '#fff',
+    borderColor: '#D64E84',
+    borderWidth: 1.5,
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 15,
+    width: '90%',
   },
-  progressLabel: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#D64E84',
-    marginBottom: 10,
+  pickerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '90%',
+    borderColor: '#D64E84',
+    borderWidth: 1.5,
+    borderRadius: 10,
+    paddingLeft: 12,
+    marginBottom: 15,
+    backgroundColor: '#fff',
+  },
+  picker: {
+    flex: 1,
   },
   saveButton: {
-    backgroundColor: '#D64E84', // Soft pink background for the button
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginTop: 20,
+    backgroundColor: '#D64E84',
+    paddingVertical: 14,
+    borderRadius: 10,
+    width: '90%',
     alignItems: 'center',
   },
   buttonText: {
@@ -126,4 +207,3 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
- 
